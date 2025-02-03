@@ -1,0 +1,42 @@
+name: Build and Deploy to Azure
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  ACR_NAME: laravelcounteracr
+  APP_NAME: laravel-app-unique123
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Login to ACR
+      uses: azure/docker-login@v1
+      with:
+        login-server: ${{ env.ACR_NAME }}.azurecr.io
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
+    
+    - name: Build and Push Docker image
+      run: |
+        docker build -t ${{ env.ACR_NAME }}.azurecr.io/laravel-app:${{ github.sha }} .
+        docker push ${{ env.ACR_NAME }}.azurecr.io/laravel-app:${{ github.sha }}
+        docker tag ${{ env.ACR_NAME }}.azurecr.io/laravel-app:${{ github.sha }} ${{ env.ACR_NAME }}.azurecr.io/laravel-app:latest
+        docker push ${{ env.ACR_NAME }}.azurecr.io/laravel-app:latest
+    
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.APP_NAME }}
+        images: ${{ env.ACR_NAME }}.azurecr.io/laravel-app:${{ github.sha }} 
