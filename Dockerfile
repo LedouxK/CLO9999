@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     nginx \
+    default-mysql-client \
     && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 
 # Installation de Composer
@@ -24,23 +25,15 @@ RUN rm -rf /etc/nginx/sites-enabled/* && \
 # Définir le répertoire de travail
 WORKDIR /var/www/html
 
-# Copier les fichiers de composer
-COPY composer.json composer.lock ./
-
-# Installer les dépendances
-RUN composer install --no-scripts --no-autoloader --no-dev
-
-# Copier le reste des fichiers de l'application
+# Copier tous les fichiers de l'application
 COPY . .
 
 # Créer le fichier .env à partir de .env.example
 COPY .env.example .env
 
-# Générer la clé d'application
-RUN php artisan key:generate
-
-# Optimisations finales
-RUN composer dump-autoload --optimize && \
+# Installation des dépendances et optimisations
+RUN composer install --no-dev --optimize-autoloader && \
+    php artisan key:generate && \
     chown -R www-data:www-data /var/www/html && \
     chmod -R 755 /var/www/html && \
     chmod -R 775 storage bootstrap/cache
