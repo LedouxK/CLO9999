@@ -87,6 +87,57 @@ resource "azurerm_linux_web_app" "app" {
       docker_registry_username = azurerm_container_registry.acr.admin_username
       docker_registry_password = azurerm_container_registry.acr.admin_password
     }
+
+    health_check_path = "/health"
+    health_check_eviction_time_in_min = 2
+
+    container_registry_use_managed_identity = false
+    
+    # Configuration des conteneurs
+    container_registry_managed_identity_client_id = null
+    always_on                                    = true
+    minimum_tls_version                          = "1.2"
+    vnet_route_all_enabled                       = false
+    
+    # Surveillance des conteneurs
+    health_check_eviction_time_in_min = 2
+    load_balancing_mode               = "LeastRequests"
+    worker_count                      = 1
+    
+    application_logs {
+      file_system_level = "Information"
+    }
+
+    http_logs {
+      file_system {
+        retention_in_days = 7
+        retention_in_mb   = 35
+      }
+    }
+
+    # Métriques détaillées
+    detailed_error_logging_enabled = true
+    failed_request_tracing_enabled = true
+  }
+
+  logs {
+    detailed_error_messages = true
+    failed_request_tracing = true
+
+    application_logs {
+      file_system_level = "Information"
+    }
+
+    http_logs {
+      file_system {
+        retention_in_days = 7
+        retention_in_mb   = 35
+      }
+    }
+  }
+
+  identity {
+    type = "SystemAssigned"
   }
 
   app_settings = {
@@ -95,6 +146,9 @@ resource "azurerm_linux_web_app" "app" {
     "DOCKER_REGISTRY_SERVER_PASSWORD"     = azurerm_container_registry.acr.admin_password
     "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "false"
     "WEBSITES_PORT"                       = "8080"
+    "WEBSITES_CONTAINER_START_TIME_LIMIT" = "1800"
+    "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "false"
+    "WEBSITE_HEALTHCHECK_MAXPINGFAILURES" = "3"
     "APP_ENV"       = "production"
     "APP_DEBUG"     = "false"
     "APP_KEY"       = "base64:${base64encode(random_password.app_key.result)}"
