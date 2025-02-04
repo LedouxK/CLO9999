@@ -28,6 +28,5 @@ php artisan storage:link || true
 # Migrations
 php artisan migrate --force
 
-# Démarrage des services
-php-fpm -D
-exec nginx -g 'daemon off;' 
+# Démarrer Apache en premier plan
+exec apache2-foreground 

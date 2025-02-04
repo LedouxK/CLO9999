@@ -1,47 +1,49 @@
-# Image de base PHP 8.2 avec FPM
-FROM php:8.2-fpm
+# Utilisez une image Docker officielle pour PHP avec Apache
+FROM php:8.2-apache
 
-# Installation des dépendances système
+# Installez les extensions PHP et outils nécessaires
 RUN apt-get update && apt-get install -y \
     git \
-    curl \
+    unzip \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
-    zip \
-    unzip \
-    nginx \
     default-mysql-client \
     && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 
-# Installation de Composer
+# Installez Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Configuration de Nginx
-COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
-RUN rm -rf /etc/nginx/sites-enabled/* && \
-    rm -rf /etc/nginx/sites-available/*
+# Configurez Apache
+ENV APACHE_DOCUMENT_ROOT /var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+RUN a2enmod rewrite
 
-# Définir le répertoire de travail
+# Copiez les fichiers de l'application
 WORKDIR /var/www/html
-
-# Copier tous les fichiers de l'application
 COPY . .
 
-# Créer le fichier .env à partir de .env.example
+# Créez le fichier .env
 COPY .env.example .env
 
-# Installation des dépendances et optimisations
-RUN composer install --no-dev --optimize-autoloader && \
-    php artisan key:generate && \
-    chown -R www-data:www-data /var/www/html && \
-    chmod -R 755 /var/www/html && \
-    chmod -R 775 storage bootstrap/cache
+# Installez les dépendances et optimisez
+RUN composer install --no-dev --optimize-autoloader \
+    && php artisan key:generate \
+    && chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html \
+    && chmod -R 775 storage bootstrap/cache
 
-# Script de démarrage
+# Configuration pour Azure App Service
+RUN echo "Listen 8080" >> /etc/apache2/ports.conf \
+    && sed -i 's/Listen 80/Listen 8080/g' /etc/apache2/ports.conf \
+    && sed -i 's/:80/:8080/g' /etc/apache2/sites-available/000-default.conf
+
+# Exposez le port 8080 pour Azure
+EXPOSE 8080
+
+# Script de démarrage pour les migrations
 COPY docker/start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh
-
-EXPOSE 8080
 
 CMD ["/usr/local/bin/start.sh"]
