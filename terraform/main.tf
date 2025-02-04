@@ -94,6 +94,7 @@ resource "azurerm_linux_web_app" "app" {
     "DOCKER_REGISTRY_SERVER_USERNAME"     = azurerm_container_registry.acr.admin_username
     "DOCKER_REGISTRY_SERVER_PASSWORD"     = azurerm_container_registry.acr.admin_password
     "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "false"
+    "WEBSITES_PORT"                       = "8080"
     "APP_ENV"       = "production"
     "APP_DEBUG"     = "false"
     "APP_KEY"       = "base64:${base64encode(random_password.app_key.result)}"
