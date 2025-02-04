@@ -28,6 +28,11 @@ jobs:
         username: ${{ secrets.ACR_USERNAME }}
         password: ${{ secrets.ACR_PASSWORD }}
     
+    - name: Prepare environment file
+      run: |
+        cp .env.production .env
+        php artisan key:generate --force
+    
     - name: Build and Push Docker image
       run: |
         docker build -t ${{ env.ACR_NAME }}.azurecr.io/laravel-app:${{ github.sha }} .
