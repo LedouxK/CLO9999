@@ -76,7 +76,20 @@ resource "azurerm_linux_web_app" "app" {
       php_version = "8.2"
     }
     always_on = true
-    app_command_line = "php-fpm"
+    app_command_line = ""  # Suppression de la commande personnalisée
+
+    # Configuration standard PHP
+    linux_fx_version = "PHP|8.2"
+    http2_enabled = true
+    minimum_tls_version = "1.2"
+    vnet_route_all_enabled = true
+
+    # Configuration des handlers
+    handlers {
+      extension = ".php"
+      script_processor = "php"
+      arguments = ""
+    }
   }
 
   app_settings = {
@@ -95,14 +108,10 @@ resource "azurerm_linux_web_app" "app" {
     "AZURE_STORAGE_KEY"     = var.storage_account_key
     "AZURE_STORAGE_CONTAINER" = var.storage_container_name
     "AZURE_STORAGE_URL"     = "https://${azurerm_storage_account.storage.name}.blob.core.windows.net"
-    "NODE_ENV"              = "production"
-    "NPM_CONFIG_PRODUCTION" = "true"
-    "WEBSITE_RUN_FROM_PACKAGE" = "1"
-    "SCM_DO_BUILD_DURING_DEPLOYMENT" = "true"
+    "WEBSITE_DOCUMENT_ROOT" = "/home/site/wwwroot/public"
     "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "true"
-    "PHP_OPCACHE_VALIDATE_TIMESTAMPS" = "0"
-    "PHP_OPCACHE_MAX_ACCELERATED_FILES" = "10000"
-    "PHP_OPCACHE_MEMORY_CONSUMPTION" = "192"
+    "PHP_INI_SCAN_DIR"     = "/usr/local/etc/php/conf.d:/home/site/ini"
+    "PHP_INI_DIRECTIVES"   = "display_errors=Off;log_errors=On;error_log=/home/LogFiles/php_errors.log"
   }
 }
 
