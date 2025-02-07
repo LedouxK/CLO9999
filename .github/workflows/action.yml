@@ -1,0 +1,114 @@
+name: 'Laravel Azure Deployment'
+description: 'Deploy Laravel application to Azure Web App'
+
+on:
+  workflow_call:
+    secrets:
+      AZURE_APP_NAME:
+        description: 'Name of the Azure Web App'
+        required: true
+      AZURE_PUBLISH_PROFILE:
+        description: 'Azure Web App publish profile'
+        required: true
+      AZURE_CLIENT_ID:
+        description: 'Azure Client ID for service principal'
+        required: true
+      AZURE_CLIENT_SECRET:
+        description: 'Azure Client Secret for service principal'
+        required: true
+      AZURE_TENANT_ID:
+        description: 'Azure Tenant ID'
+        required: true
+      APP_KEY:
+        description: 'Laravel application key'
+        required: true
+      DB_PASSWORD:
+        description: 'Database password'
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        description: 'Azure Subscription ID'
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Debug secrets
+        run: |
+          if [ -n "${{ secrets.AZURE_APP_NAME }}" ]; then
+            echo "AZURE_APP_NAME is set"
+          else
+            echo "AZURE_APP_NAME is not set"
+          fi
+          # ... similar checks for other secrets
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite, pdo_mysql, bcmath, soap, zip
+          coverage: none
+
+      - name: Get composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --no-interaction --prefer-dist
+
+      - name: Prepare Laravel Application
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan config:clear
+          php artisan cache:clear
+          chmod -R 777 storage bootstrap/cache
+        env:
+          APP_KEY: ${{ secrets.APP_KEY }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+
+      - name: Configure MySQL Firewall
+        run: |
+          # Get the public IP of the GitHub Actions runner
+          PUBLIC_IP=$(curl -s https://api.ipify.org)
+          echo "GitHub Actions IP: $PUBLIC_IP"
+
+          # Create a temporary firewall rule
+          az mysql flexible-server firewall-rule create \
+            --name githubactions_temp \
+            --resource-group rg-laravel-counter-app \
+            --server-name mysql-laravel-counter-app \
+            --start-ip-address $PUBLIC_IP \
+            --end-ip-address $PUBLIC_IP
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ secrets.AZURE_APP_NAME }}
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}
+          package: .
+
+      - name: Remove MySQL Firewall Rule
+        if: always()
+        run: |
+          az mysql flexible-server firewall-rule delete \
+            --name githubactions_temp \
+            --resource-group rg-laravel-counter-app \
+            --server-name mysql-laravel-counter-app \
+            --yes 
