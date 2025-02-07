@@ -10,23 +10,14 @@ on:
       AZURE_PUBLISH_PROFILE:
         description: 'Azure Web App publish profile'
         required: true
-      AZURE_CLIENT_ID:
-        description: 'Azure Client ID for service principal'
-        required: true
-      AZURE_CLIENT_SECRET:
-        description: 'Azure Client Secret for service principal'
-        required: true
-      AZURE_TENANT_ID:
-        description: 'Azure Tenant ID'
+      AZURE_CREDENTIALS:
+        description: 'Azure credentials JSON'
         required: true
       APP_KEY:
         description: 'Laravel application key'
         required: true
       DB_PASSWORD:
         description: 'Database password'
-        required: true
-      AZURE_SUBSCRIPTION_ID:
-        description: 'Azure Subscription ID'
         required: true
 
 jobs:
@@ -38,19 +29,35 @@ jobs:
       - name: Debug secrets
         run: |
           if [ -n "${{ secrets.AZURE_APP_NAME }}" ]; then
-            echo "AZURE_APP_NAME is set"
+            echo "AZURE_APP_NAME est défini"
           else
-            echo "AZURE_APP_NAME is not set"
+            echo "AZURE_APP_NAME n'est pas défini"
           fi
-          # ... similar checks for other secrets
+          if [ -n "${{ secrets.AZURE_PUBLISH_PROFILE }}" ]; then
+            echo "AZURE_PUBLISH_PROFILE est défini"
+          else
+            echo "AZURE_PUBLISH_PROFILE n'est pas défini"
+          fi
+          if [ -n "${{ secrets.AZURE_CREDENTIALS }}" ]; then
+            echo "AZURE_CREDENTIALS est défini"
+          else
+            echo "AZURE_CREDENTIALS n'est pas défini"
+          fi
 
       - name: Login to Azure
         uses: azure/login@v1
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Debug AZURE_CREDENTIALS
+        run: |
+          echo "Vérification du format JSON de AZURE_CREDENTIALS:"
+          echo '${{ secrets.AZURE_CREDENTIALS }}' | jq '.'
+          
+          echo "Vérification des permissions du Service Principal:"
+          CLIENTID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')
+          echo "Client ID: $CLIENTID"
+          az role assignment list --assignee "$CLIENTID" --output json | jq '.'
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -73,11 +80,10 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --no-dev --no-interaction --prefer-dist
 
-      - name: Set Laravel Permissions
+      - name: Fix permissions for Laravel storage & bootstrap
         run: |
-          chmod -R 755 storage bootstrap/cache
+          chmod -R 777 storage bootstrap/cache
           mkdir -p storage/framework/{sessions,views,cache}
-          chmod -R 755 storage/framework
 
       - name: Prepare Laravel Application
         run: |
@@ -88,6 +94,17 @@ jobs:
         env:
           APP_KEY: ${{ secrets.APP_KEY }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+
+      - name: Vérifier les fichiers avant déploiement
+        run: |
+          echo "=== Contenu du répertoire racine ==="
+          ls -la
+          echo "=== Contenu du répertoire public ==="
+          ls -la public
+          echo "=== Contenu du répertoire storage ==="
+          ls -la storage
+          echo "=== Contenu du répertoire bootstrap/cache ==="
+          ls -la bootstrap/cache
 
       - name: Configure MySQL Firewall
         run: |
@@ -103,12 +120,27 @@ jobs:
             --start-ip-address $PUBLIC_IP \
             --end-ip-address $PUBLIC_IP
 
+      - name: Zip artifact for deployment
+        run: zip -r release.zip . -x ".git/*" "node_modules/*" "vendor/*"
+
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ secrets.AZURE_APP_NAME }}
           publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}
-          package: .
+          package: release.zip
+
+      - name: Verify Deployment
+        run: |
+          echo "🔍 Vérification du déploiement..."
+          echo "📂 URL de l'application: https://${{ secrets.AZURE_APP_NAME }}.azurewebsites.net"
+          echo "📂 URL Kudu (SCM): https://${{ secrets.AZURE_APP_NAME }}.scm.azurewebsites.net"
+          
+          # Attendre que l'application soit disponible
+          sleep 30
+          
+          # Vérifier si l'application répond
+          curl -I "https://${{ secrets.AZURE_APP_NAME }}.azurewebsites.net"
 
       - name: Remove MySQL Firewall Rule
         if: always()
