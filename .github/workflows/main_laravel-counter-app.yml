@@ -86,10 +86,10 @@ jobs:
 
       - name: Set Laravel Permissions
         run: |
-          chmod -R 777 storage bootstrap/cache
-          chown -R www-data:www-data .
+          chmod -R 755 storage bootstrap/cache
           find . -type f -exec chmod 644 {} \;
           find . -type d -exec chmod 755 {} \;
+          mkdir -p storage/framework/{sessions,views,cache}
 
       - name: Configure MySQL Firewall
         env:
@@ -109,10 +109,10 @@ jobs:
           # Ajouter une règle de pare-feu temporaire pour GitHub Actions
           az mysql flexible-server firewall-rule create \
             --resource-group laravel-rg \
-            --name laravelmysqlsrv \
+            --server-name laravelmysqlsrv \
+            --name allow-github-actions \
             --start-ip-address $PUBLIC_IP \
-            --end-ip-address $PUBLIC_IP \
-            --rule-name allow-github-actions
+            --end-ip-address $PUBLIC_IP
 
       - name: Run Migrations
         run: |
@@ -194,11 +194,22 @@ jobs:
           echo "📂 URL de l'application: https://${{ secrets.AZURE_APP_NAME }}.azurewebsites.net"
           echo "📂 URL Kudu (SCM): https://${{ secrets.AZURE_APP_NAME }}.scm.azurewebsites.net"
           
+          # Vérifier les secrets
+          echo "Vérification des secrets:"
+          echo "AZURE_APP_NAME est défini: ${{ secrets.AZURE_APP_NAME != '' }}"
+          echo "AZURE_PUBLISH_PROFILE est défini: ${{ secrets.AZURE_PUBLISH_PROFILE != '' }}"
+          echo "AZURE_CREDENTIALS est défini: ${{ secrets.AZURE_CREDENTIALS != '' }}"
+          echo "DB_PASSWORD est défini: ${{ secrets.DB_PASSWORD != '' }}"
+          
           # Attendre que l'application soit disponible
           sleep 30
           
           # Vérifier si l'application répond
           curl -I "https://${{ secrets.AZURE_APP_NAME }}.azurewebsites.net"
+          
+          # Vérifier l'état de MySQL
+          echo "Vérification de MySQL..."
+          az mysql flexible-server show --name laravelmysqlsrv --resource-group laravel-rg
 
       - name: Force deployment if needed
         if: failure()
