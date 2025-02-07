@@ -1,58 +1,50 @@
-terraform {
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = ">=3.0.0, <4.0.0"
-    }
-    github = {
-      source  = "integrations/github"
-      version = "~> 5.0"
-    }
-  }
-}
-
-provider "azurerm" {
-  features {}
-}
-
-# Activation du provider GitHub
-provider "github" {
-  token = var.github_token
-  owner = var.github_organization
-}
-
-# Groupe de Ressources
 resource "azurerm_resource_group" "rg" {
   name     = "laravel-rg"
   location = "northeurope"
 }
 
-# Plan d'hébergement Azure App Service
+# Storage Account pour les uploads Laravel
+resource "azurerm_storage_account" "storage" {
+  name                     = "laravelcounterfiles"
+  resource_group_name      = azurerm_resource_group.rg.name
+  location                 = azurerm_resource_group.rg.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+
+resource "azurerm_storage_container" "uploads" {
+  name                  = "uploads"
+  storage_account_name  = azurerm_storage_account.storage.name
+  container_access_type = "private"
+}
+
 resource "azurerm_service_plan" "asp" {
   name                = "laravel-appservice-plan"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-  os_type             = "Linux"
-  sku_name            = "B1"  # Plan de base moins cher
+  os_type            = "Linux"
+  sku_name           = "B1"
 }
 
-# Base de données MySQL Flexible Server
+# Serveur MySQL Flexible
 resource "azurerm_mysql_flexible_server" "mysql" {
-  name                = "laravelmysqlsrv"
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
-  administrator_login = "mysqladmin"
-  administrator_password = var.mysql_admin_password
-  sku_name            = "B_Standard_B1ms"
-  version             = "8.0.21"
-  zone                = "1"
+  name                   = "laravelmysqlsrv"
+  resource_group_name    = azurerm_resource_group.rg.name
+  location              = azurerm_resource_group.rg.location
+  administrator_login    = "mysqladmin"
+  administrator_password = "P@ssw0rd2024#SecureDB"
+  backup_retention_days  = 7
+  delegated_subnet_id    = null
+  private_dns_zone_id    = null
+  sku_name              = "B_Standard_B1ms"
 
   storage {
     size_gb = 20
+    iops    = 360
   }
 
-  backup_retention_days        = 7
-  geo_redundant_backup_enabled = false
+  version = "8.0.21"
+  zone    = "1"
 }
 
 # Base de données Laravel
@@ -61,12 +53,30 @@ resource "azurerm_mysql_flexible_database" "mysql_db" {
   resource_group_name = azurerm_resource_group.rg.name
   server_name         = azurerm_mysql_flexible_server.mysql.name
   charset             = "utf8mb4"
-  collation           = "utf8mb4_unicode_ci"
+  collation          = "utf8mb4_unicode_ci"
 }
 
-# Web App PHP 8.3
+# Règles de pare-feu
+resource "azurerm_mysql_flexible_server_firewall_rule" "allow_azure" {
+  name                = "allow-azure-services"
+  resource_group_name = azurerm_resource_group.rg.name
+  server_name         = azurerm_mysql_flexible_server.mysql.name
+  start_ip_address    = "0.0.0.0"
+  end_ip_address      = "0.0.0.0"
+}
+
+# Règle pour GitHub Actions
+resource "azurerm_mysql_flexible_server_firewall_rule" "allow_github" {
+  name                = "allow-github-actions"
+  resource_group_name = azurerm_resource_group.rg.name
+  server_name         = azurerm_mysql_flexible_server.mysql.name
+  start_ip_address    = "20.27.177.0"  # GitHub Actions IP range
+  end_ip_address      = "20.27.177.255"
+}
+
+# App Service
 resource "azurerm_linux_web_app" "app" {
-  name                = var.web_app_name
+  name                = "laravel-counter-app"
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
   service_plan_id     = azurerm_service_plan.asp.id
@@ -76,74 +86,45 @@ resource "azurerm_linux_web_app" "app" {
       php_version = "8.2"
     }
     always_on = true
-    app_command_line = ""  # Suppression de la commande personnalisée
-
-    # Configuration standard PHP
-    http2_enabled = true
+    
+    # Configuration SSL
     minimum_tls_version = "1.2"
-    vnet_route_all_enabled = true
+    http2_enabled = true
   }
 
   app_settings = {
-    "APP_ENV"               = "production"
-    "APP_DEBUG"             = "false"
-    "APP_URL"               = "https://${var.web_app_name}.azurewebsites.net"
-    "APP_KEY"               = var.app_key
-    "DB_CONNECTION"         = "mysql"
-    "DB_HOST"               = azurerm_mysql_flexible_server.mysql.fqdn
-    "DB_PORT"               = "3306"
-    "DB_DATABASE"           = azurerm_mysql_flexible_database.mysql_db.name
-    "DB_USERNAME"           = azurerm_mysql_flexible_server.mysql.administrator_login
-    "DB_PASSWORD"           = var.mysql_admin_password
-    "FILESYSTEM_DISK"       = "azure"
-    "AZURE_STORAGE_NAME"    = var.storage_account_name
-    "AZURE_STORAGE_KEY"     = var.storage_account_key
-    "AZURE_STORAGE_CONTAINER" = var.storage_container_name
-    "AZURE_STORAGE_URL"     = "https://${azurerm_storage_account.storage.name}.blob.core.windows.net"
+    # Configuration de base Laravel
     "WEBSITE_DOCUMENT_ROOT" = "/home/site/wwwroot/public"
     "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "true"
-    "WEBSITE_RUN_FROM_PACKAGE" = "0"
-    "PHP_INI_SCAN_DIR"     = "/usr/local/etc/php/conf.d:/home/site/ini"
-    "PHP_INI_DIRECTIVES"   = "display_errors=Off;log_errors=On;error_log=/home/LogFiles/php_errors.log"
+    "APP_ENV" = "production"
+    "APP_DEBUG" = "false"
+    "APP_URL" = "https://laravel-counter-app.azurewebsites.net"
+    "APP_KEY" = "base64:gAMeJ1jgM7jtkjKkXyNfSB/Riv8Y28+6nPgUdrCg2ik="
+    
+    # Configuration MySQL
+    "DB_CONNECTION"        = "mysql"
+    "DB_HOST"             = azurerm_mysql_flexible_server.mysql.fqdn
+    "DB_PORT"             = "3306"
+    "DB_DATABASE"         = azurerm_mysql_flexible_database.mysql_db.name
+    "DB_USERNAME"         = "${azurerm_mysql_flexible_server.mysql.administrator_login}@${azurerm_mysql_flexible_server.mysql.name}"
+    "DB_PASSWORD"         = azurerm_mysql_flexible_server.mysql.administrator_password
+    "MYSQL_SSL"           = "true"
+    "MYSQL_ATTR_SSL_CA"   = "/etc/ssl/certs/Baltimore_CyberTrust_Root.crt.pem"
+
+    # Configuration du stockage Azure
+    "FILESYSTEM_DRIVER" = "azure"
+    "AZURE_STORAGE_NAME" = azurerm_storage_account.storage.name
+    "AZURE_STORAGE_KEY" = azurerm_storage_account.storage.primary_access_key
+    "AZURE_STORAGE_CONTAINER" = azurerm_storage_container.uploads.name
+    "AZURE_STORAGE_URL" = "https://${azurerm_storage_account.storage.name}.blob.core.windows.net"
   }
-}
 
-# Storage Account pour Laravel (Stockage de fichiers)
-resource "azurerm_storage_account" "storage" {
-  name                     = var.storage_account_name
-  resource_group_name      = azurerm_resource_group.rg.name
-  location                 = azurerm_resource_group.rg.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-}
+  # Configuration SSL
+  https_only = true
 
-resource "azurerm_storage_container" "files" {
-  name                  = var.storage_container_name
-  storage_account_name  = azurerm_storage_account.storage.name
-  container_access_type = "private"
-}
-
-# Secrets GitHub pour CI/CD
-resource "github_actions_secret" "azure_app_name" {
-  repository       = var.github_repository
-  secret_name      = "AZURE_APP_NAME"
-  plaintext_value  = azurerm_linux_web_app.app.name
-}
-
-resource "github_actions_secret" "azure_publish_profile" {
-  repository       = var.github_repository
-  secret_name      = "AZURE_PUBLISH_PROFILE"
-  plaintext_value  = var.azure_publish_profile
-}
-
-resource "github_actions_secret" "app_key" {
-  repository       = var.github_repository
-  secret_name      = "APP_KEY"
-  plaintext_value  = var.app_key
-}
-
-resource "github_actions_secret" "db_password" {
-  repository       = var.github_repository
-  secret_name      = "DB_PASSWORD"
-  plaintext_value  = var.mysql_admin_password
-}
+  depends_on = [
+    azurerm_mysql_flexible_server.mysql,
+    azurerm_mysql_flexible_database.mysql_db,
+    azurerm_storage_account.storage
+  ]
+} 

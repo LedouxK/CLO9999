@@ -1,0 +1,96 @@
+name: Deploy to Azure
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: 'Production'
+      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, zip, fileinfo, gd
+          coverage: none
+
+      - name: Get composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --no-interaction --prefer-dist
+
+      - name: Download SSL Certificate
+        run: curl -o /etc/ssl/certs/Baltimore_CyberTrust_Root.crt.pem https://dl.cacerts.digicert.com/DigiCertGlobalRootCA.crt.pem
+
+      - name: Prepare Laravel Application
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          echo "APP_ENV=production" >> .env
+          echo "APP_DEBUG=false" >> .env
+          echo "APP_URL=https://laravel-counter-app.azurewebsites.net" >> .env
+          
+          # MySQL Configuration
+          echo "DB_CONNECTION=mysql" >> .env
+          echo "DB_HOST=laravelmysqlsrv.mysql.database.azure.com" >> .env
+          echo "DB_PORT=3306" >> .env
+          echo "DB_DATABASE=laraveldb" >> .env
+          echo "DB_USERNAME=mysqladmin@laravelmysqlsrv" >> .env
+          echo "DB_PASSWORD=P@ssw0rd2024#SecureDB" >> .env
+          echo "MYSQL_SSL=true" >> .env
+          echo "MYSQL_ATTR_SSL_CA=/etc/ssl/certs/Baltimore_CyberTrust_Root.crt.pem" >> .env
+          
+          # Azure Storage Configuration
+          echo "FILESYSTEM_DRIVER=azure" >> .env
+          echo "AZURE_STORAGE_NAME=laravelcounterfiles" >> .env
+          echo "AZURE_STORAGE_CONTAINER=uploads" >> .env
+          echo "AZURE_STORAGE_URL=https://laravelcounterfiles.blob.core.windows.net" >> .env
+
+      - name: Directory Permissions
+        run: |
+          chmod -R 777 storage bootstrap/cache
+          mkdir -p storage/framework/{sessions,views,cache}
+
+      - name: Generate Application Key
+        run: php artisan key:generate --force
+
+      - name: Run Database Migrations
+        run: |
+          php artisan config:clear
+          php artisan migrate --force
+          php artisan storage:link
+
+      - name: Optimize Laravel
+        run: |
+          php artisan optimize:clear
+          php artisan optimize
+          php artisan view:cache
+          php artisan config:cache
+          php artisan route:cache
+
+      - name: Zip artifact for deployment
+        run: zip release.zip ./* .env -r
+
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'laravel-counter-app'
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}
+          package: release.zip 
