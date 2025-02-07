@@ -79,17 +79,9 @@ resource "azurerm_linux_web_app" "app" {
     app_command_line = ""  # Suppression de la commande personnalisée
 
     # Configuration standard PHP
-    linux_fx_version = "PHP|8.2"
     http2_enabled = true
     minimum_tls_version = "1.2"
     vnet_route_all_enabled = true
-
-    # Configuration des handlers
-    handlers {
-      extension = ".php"
-      script_processor = "php"
-      arguments = ""
-    }
   }
 
   app_settings = {
@@ -110,6 +102,7 @@ resource "azurerm_linux_web_app" "app" {
     "AZURE_STORAGE_URL"     = "https://${azurerm_storage_account.storage.name}.blob.core.windows.net"
     "WEBSITE_DOCUMENT_ROOT" = "/home/site/wwwroot/public"
     "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "true"
+    "WEBSITE_RUN_FROM_PACKAGE" = "0"
     "PHP_INI_SCAN_DIR"     = "/usr/local/etc/php/conf.d:/home/site/ini"
     "PHP_INI_DIRECTIVES"   = "display_errors=Off;log_errors=On;error_log=/home/LogFiles/php_errors.log"
   }

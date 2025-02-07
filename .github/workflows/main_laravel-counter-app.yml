@@ -45,8 +45,13 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
 
-      - name: Generate key
-        run: php artisan key:generate --force
+      - name: Create .env file
+        run: |
+          cp .env.example .env
+          echo "APP_KEY=${{ secrets.APP_KEY }}" >> .env
+          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
+          echo "APP_ENV=production" >> .env
+          echo "APP_DEBUG=false" >> .env
 
       - name: Directory Permissions
         run: chmod -R 777 storage bootstrap/cache
@@ -90,18 +95,11 @@ jobs:
       - name: Unzip artifact for deployment
         run: unzip release.zip
       
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_28F896382E504514B82582F12653786C }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_F1C5B57C05C944C0A3E581F1265E55B2 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_84D096A159A24631977C17CB9D8E9E91 }}
-
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
-          app-name: 'laravel-counter-app'
-          slot-name: 'Production'
+          app-name: ${{ secrets.AZURE_APP_NAME }}
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}
           package: .
           
