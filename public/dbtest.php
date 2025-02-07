@@ -1,12 +1,13 @@
 <?php
 try {
-    $host = 'laravelmysqlsrv.mysql.database.azure.com';
-    $username = 'mysqladmin@laravelmysqlsrv';
+    $host = getenv('DB_HOST') ?: 'laravelmysqlsrv.mysql.database.azure.com';
+    $username = getenv('DB_USERNAME') ?: 'mysqladmin@laravelmysqlsrv';
     $password = getenv('DB_PASSWORD');
-    $db_name = 'laraveldb';
+    $db_name = getenv('DB_DATABASE') ?: 'laraveldb';
+    $ssl_cert = getenv('MYSQL_ATTR_SSL_CA') ?: '/etc/ssl/certs/Baltimore_CyberTrust_Root.crt.pem';
 
     $options = array(
-        PDO::MYSQL_ATTR_SSL_CA => '/etc/ssl/certs/Baltimore_CyberTrust_Root.crt.pem',
+        PDO::MYSQL_ATTR_SSL_CA => $ssl_cert,
         PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => true,
     );
 
@@ -19,15 +20,20 @@ try {
     
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
-    echo "✅ Connexion réussie à MySQL!";
+    echo "✅ Connexion réussie à MySQL!\n";
     
     // Test de la base de données
     $stmt = $conn->query("SHOW TABLES");
-    echo "\n\nTables dans la base de données:\n";
+    echo "\nTables dans la base de données:\n";
     while ($row = $stmt->fetch()) {
         echo "- " . $row[0] . "\n";
     }
     
 } catch(PDOException $e) {
     echo "❌ Erreur de connexion: " . $e->getMessage();
+    echo "\n\nDébogage:\n";
+    echo "Host: " . $host . "\n";
+    echo "Username: " . $username . "\n";
+    echo "Database: " . $db_name . "\n";
+    echo "SSL Cert Path: " . $ssl_cert . "\n";
 } 
