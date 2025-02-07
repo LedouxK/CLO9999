@@ -35,8 +35,11 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --no-dev --no-interaction --prefer-dist
 
-      - name: Download SSL Certificate
-        run: curl -o /etc/ssl/certs/Baltimore_CyberTrust_Root.crt.pem https://dl.cacerts.digicert.com/DigiCertGlobalRootCA.crt.pem
+      - name: Create SSL directory and copy certificate
+        run: |
+          sudo mkdir -p /etc/ssl/certs
+          sudo cp certs/DigiCertGlobalRootCA.crt.pem /etc/ssl/certs/Baltimore_CyberTrust_Root.crt.pem
+          sudo chmod 644 /etc/ssl/certs/Baltimore_CyberTrust_Root.crt.pem
 
       - name: Prepare Laravel Application
         run: |
@@ -52,13 +55,14 @@ jobs:
           echo "DB_PORT=3306" >> .env
           echo "DB_DATABASE=laraveldb" >> .env
           echo "DB_USERNAME=mysqladmin@laravelmysqlsrv" >> .env
-          echo "DB_PASSWORD=P@ssw0rd2024#SecureDB" >> .env
+          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
           echo "MYSQL_SSL=true" >> .env
           echo "MYSQL_ATTR_SSL_CA=/etc/ssl/certs/Baltimore_CyberTrust_Root.crt.pem" >> .env
           
           # Azure Storage Configuration
           echo "FILESYSTEM_DRIVER=azure" >> .env
           echo "AZURE_STORAGE_NAME=laravelcounterfiles" >> .env
+          echo "AZURE_STORAGE_KEY=${{ secrets.AZURE_STORAGE_KEY }}" >> .env
           echo "AZURE_STORAGE_CONTAINER=uploads" >> .env
           echo "AZURE_STORAGE_URL=https://laravelcounterfiles.blob.core.windows.net" >> .env
 
