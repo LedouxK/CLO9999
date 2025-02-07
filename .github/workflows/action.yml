@@ -73,13 +73,18 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --no-dev --no-interaction --prefer-dist
 
+      - name: Set Laravel Permissions
+        run: |
+          chmod -R 755 storage bootstrap/cache
+          mkdir -p storage/framework/{sessions,views,cache}
+          chmod -R 755 storage/framework
+
       - name: Prepare Laravel Application
         run: |
           cp .env.example .env
           php artisan key:generate
           php artisan config:clear
           php artisan cache:clear
-          chmod -R 777 storage bootstrap/cache
         env:
           APP_KEY: ${{ secrets.APP_KEY }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
