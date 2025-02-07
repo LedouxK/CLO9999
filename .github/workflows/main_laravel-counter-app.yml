@@ -62,21 +62,25 @@ jobs:
         run: chmod -R 777 storage bootstrap/cache
 
       - name: Configure MySQL Firewall
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID_28F896382E504514B82582F12653786C }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZUREAPPSERVICE_CLIENTSECRET_5B8E0E3BFCF34D9E8F9D7A6B5C4D3E2A1 }}
+          AZURE_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID_F1C5B57C05C944C0A3E581F1265E55B2 }}
         run: |
           # Récupérer l'IP publique de l'exécuteur GitHub Actions
           PUBLIC_IP=$(curl -s https://api.ipify.org)
           echo "IP publique de l'exécuteur: $PUBLIC_IP"
           
-          # Utiliser Azure CLI pour ajouter une règle de pare-feu temporaire
+          # Connexion à Azure
           az login --service-principal \
-            --username ${{ secrets.AZUREAPPSERVICE_CLIENTID_28F896382E504514B82582F12653786C }} \
-            --password ${{ secrets.AZUREAPPSERVICE_CLIENTSECRET_5B8E0E3BFCF34D9E8F9D7A6B5C4D3E2A1 }} \
-            --tenant ${{ secrets.AZUREAPPSERVICE_TENANTID_F1C5B57C05C944C0A3E581F1265E55B2 }}
+            --username $AZURE_CLIENT_ID \
+            --password $AZURE_CLIENT_SECRET \
+            --tenant $AZURE_TENANT_ID
           
+          # Ajouter une règle de pare-feu temporaire pour GitHub Actions
           az mysql flexible-server firewall-rule create \
             --resource-group laravel-rg \
-            --name laravel-counter-app \
-            --server-name laravelmysqlsrv \
+            --name laravelmysqlsrv \
             --start-ip-address $PUBLIC_IP \
             --end-ip-address $PUBLIC_IP \
             --rule-name allow-github-actions
@@ -89,10 +93,21 @@ jobs:
 
       - name: Remove MySQL Firewall Rule
         if: always()
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZUREAPPSERVICE_CLIENTID_28F896382E504514B82582F12653786C }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZUREAPPSERVICE_CLIENTSECRET_5B8E0E3BFCF34D9E8F9D7A6B5C4D3E2A1 }}
+          AZURE_TENANT_ID: ${{ secrets.AZUREAPPSERVICE_TENANTID_F1C5B57C05C944C0A3E581F1265E55B2 }}
         run: |
+          # Reconnexion à Azure (au cas où la session a expiré)
+          az login --service-principal \
+            --username $AZURE_CLIENT_ID \
+            --password $AZURE_CLIENT_SECRET \
+            --tenant $AZURE_TENANT_ID
+
+          # Suppression de la règle de pare-feu
           az mysql flexible-server firewall-rule delete \
             --resource-group laravel-rg \
-            --server-name laravelmysqlsrv \
+            --name laravelmysqlsrv \
             --rule-name allow-github-actions \
             --yes
 
