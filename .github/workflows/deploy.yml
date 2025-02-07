@@ -54,7 +54,7 @@ jobs:
           echo "DB_HOST=laravelmysqlsrv.mysql.database.azure.com" >> .env
           echo "DB_PORT=3306" >> .env
           echo "DB_DATABASE=laraveldb" >> .env
-          echo "DB_USERNAME=mysqladmin@laravelmysqlsrv" >> .env
+          echo "DB_USERNAME=mysqladmin" >> .env
           echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
           echo "MYSQL_SSL=true" >> .env
           echo "MYSQL_ATTR_SSL_CA=/etc/ssl/certs/Baltimore_CyberTrust_Root.crt.pem" >> .env
