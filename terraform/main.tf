@@ -73,7 +73,7 @@ resource "azurerm_linux_web_app" "app" {
 
   site_config {
     application_stack {
-      php_version = "8.3"
+      php_version = "8.2"
     }
     always_on = true
     app_command_line = "php-fpm"
