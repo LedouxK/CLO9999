@@ -22,12 +22,9 @@ jobs:
     secrets:
       AZURE_APP_NAME: ${{ secrets.AZURE_APP_NAME }}
       AZURE_PUBLISH_PROFILE: ${{ secrets.AZURE_PUBLISH_PROFILE }}
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
       APP_KEY: ${{ secrets.APP_KEY }}
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_84D096A159A24631977C17CB9D8E9E91 }}
 
   build:
     runs-on: ubuntu-latest
@@ -43,8 +40,7 @@ jobs:
           echo "Vérification de la présence des secrets:"
           echo "AZURE_APP_NAME est défini: ${{ secrets.AZURE_APP_NAME != '' }}"
           echo "AZURE_PUBLISH_PROFILE est défini: ${{ secrets.AZURE_PUBLISH_PROFILE != '' }}"
-          echo "AZURE_CLIENT_ID est défini: ${{ secrets.AZURE_CLIENT_ID != '' }}"
-          echo "AZURE_CLIENT_SECRET est défini: ${{ secrets.AZURE_CLIENT_SECRET != '' }}"
+          echo "AZURE_CREDENTIALS est défini: ${{ secrets.AZURE_CREDENTIALS != '' }}"
           echo "AZURE_TENANT_ID est défini: ${{ secrets.AZURE_TENANT_ID != '' }}"
 
       - name: Setup PHP
@@ -97,10 +93,7 @@ jobs:
 
       - name: Configure MySQL Firewall
         env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_84D096A159A24631977C17CB9D8E9E91 }}
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
         run: |
           # Récupérer l'IP publique de l'exécuteur GitHub Actions
           PUBLIC_IP=$(curl -s https://api.ipify.org)
@@ -108,9 +101,7 @@ jobs:
           
           # Connexion à Azure
           az login --service-principal \
-            --username $AZURE_CLIENT_ID \
-            --password $AZURE_CLIENT_SECRET \
-            --tenant $AZURE_TENANT_ID
+            --username $AZURE_CREDENTIALS
 
           # Définir la subscription
           az account set --subscription $AZURE_SUBSCRIPTION_ID
@@ -132,16 +123,11 @@ jobs:
       - name: Remove MySQL Firewall Rule
         if: always()
         env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_84D096A159A24631977C17CB9D8E9E91 }}
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
         run: |
           # Reconnexion à Azure (au cas où la session a expiré)
           az login --service-principal \
-            --username $AZURE_CLIENT_ID \
-            --password $AZURE_CLIENT_SECRET \
-            --tenant $AZURE_TENANT_ID
+            --username $AZURE_CREDENTIALS
 
           # Définir la subscription
           az account set --subscription $AZURE_SUBSCRIPTION_ID
@@ -217,18 +203,13 @@ jobs:
       - name: Force deployment if needed
         if: failure()
         env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_84D096A159A24631977C17CB9D8E9E91 }}
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
         run: |
           echo "⚠️ Tentative de déploiement forcé..."
           
           # Connexion à Azure
           az login --service-principal \
-            --username $AZURE_CLIENT_ID \
-            --password $AZURE_CLIENT_SECRET \
-            --tenant $AZURE_TENANT_ID
+            --username $AZURE_CREDENTIALS
 
           # Définir la subscription
           az account set --subscription $AZURE_SUBSCRIPTION_ID
