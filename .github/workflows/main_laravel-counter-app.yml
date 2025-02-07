@@ -61,11 +61,40 @@ jobs:
       - name: Directory Permissions
         run: chmod -R 777 storage bootstrap/cache
 
+      - name: Configure MySQL Firewall
+        run: |
+          # Récupérer l'IP publique de l'exécuteur GitHub Actions
+          PUBLIC_IP=$(curl -s https://api.ipify.org)
+          echo "IP publique de l'exécuteur: $PUBLIC_IP"
+          
+          # Utiliser Azure CLI pour ajouter une règle de pare-feu temporaire
+          az login --service-principal \
+            --username ${{ secrets.AZUREAPPSERVICE_CLIENTID_28F896382E504514B82582F12653786C }} \
+            --password ${{ secrets.AZUREAPPSERVICE_CLIENTSECRET_5B8E0E3BFCF34D9E8F9D7A6B5C4D3E2A1 }} \
+            --tenant ${{ secrets.AZUREAPPSERVICE_TENANTID_F1C5B57C05C944C0A3E581F1265E55B2 }}
+          
+          az mysql flexible-server firewall-rule create \
+            --resource-group laravel-rg \
+            --name laravel-counter-app \
+            --server-name laravelmysqlsrv \
+            --start-ip-address $PUBLIC_IP \
+            --end-ip-address $PUBLIC_IP \
+            --rule-name allow-github-actions
+
       - name: Run Migrations
         run: |
           php artisan migrate --force
           php artisan cache:table
           php artisan session:table
+
+      - name: Remove MySQL Firewall Rule
+        if: always()
+        run: |
+          az mysql flexible-server firewall-rule delete \
+            --resource-group laravel-rg \
+            --server-name laravelmysqlsrv \
+            --rule-name allow-github-actions \
+            --yes
 
       - name: Clear Config
         run: |
