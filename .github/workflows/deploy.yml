@@ -46,7 +46,7 @@ jobs:
           cp .env.example .env
           php artisan key:generate
           echo "APP_ENV=production" >> .env
-          echo "APP_DEBUG=false" >> .env
+          echo "APP_DEBUG=true" >> .env
           echo "APP_URL=https://laravel-counter-app.azurewebsites.net" >> .env
           
           # MySQL Configuration
@@ -54,7 +54,7 @@ jobs:
           echo "DB_HOST=laravelmysqlsrv.mysql.database.azure.com" >> .env
           echo "DB_PORT=3306" >> .env
           echo "DB_DATABASE=laraveldb" >> .env
-          echo "DB_USERNAME=mysqladmin" >> .env
+          echo "DB_USERNAME=mysqladmin@laravelmysqlsrv" >> .env
           echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
           echo "MYSQL_SSL=true" >> .env
           echo "MYSQL_ATTR_SSL_CA=/etc/ssl/certs/Baltimore_CyberTrust_Root.crt.pem" >> .env
@@ -74,22 +74,12 @@ jobs:
       - name: Generate Application Key
         run: php artisan key:generate --force
 
-      - name: Run Database Migrations
+      - name: Prepare deployment package
         run: |
-          php artisan config:clear
-          php artisan migrate --force
-          php artisan storage:link
-
-      - name: Optimize Laravel
-        run: |
-          php artisan optimize:clear
-          php artisan optimize
-          php artisan view:cache
-          php artisan config:cache
-          php artisan route:cache
-
-      - name: Zip artifact for deployment
-        run: zip release.zip ./* .env -r
+          rm -rf .git .github .env.example
+          cp .env .env.backup
+          zip -r release.zip .
+          cp .env.backup .env
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
@@ -97,4 +87,12 @@ jobs:
         with:
           app-name: 'laravel-counter-app'
           publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}
-          package: release.zip 
+          package: release.zip
+
+      - name: Post-deployment setup
+        run: |
+          # Attendre que le déploiement soit effectif
+          sleep 30
+          
+          # Vérifier le déploiement
+          curl -I https://laravel-counter-app.azurewebsites.net 
