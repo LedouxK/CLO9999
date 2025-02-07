@@ -52,20 +52,38 @@ jobs:
           echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
           echo "APP_ENV=production" >> .env
           echo "APP_DEBUG=false" >> .env
+          echo "DB_CONNECTION=mysql" >> .env
+          echo "DB_HOST=laravelmysqlsrv.mysql.database.azure.com" >> .env
+          echo "DB_PORT=3306" >> .env
+          echo "DB_DATABASE=laraveldb" >> .env
+          echo "DB_USERNAME=mysqladmin" >> .env
 
       - name: Directory Permissions
         run: chmod -R 777 storage bootstrap/cache
 
-      - name: Create Database
+      - name: Run Migrations
         run: |
-          mkdir -p database
-          touch database/database.sqlite
+          php artisan migrate --force
+          php artisan cache:table
+          php artisan session:table
 
       - name: Clear Config
         run: |
           php artisan config:clear
           php artisan cache:clear
           php artisan view:clear
+          php artisan route:clear
+          php artisan event:clear
+
+      - name: Optimize
+        run: |
+          php artisan optimize:clear
+          php artisan optimize
+
+      - name: Create Database
+        run: |
+          mkdir -p database
+          touch database/database.sqlite
 
       - name: Zip artifact for deployment
         run: zip release.zip ./* .env.example .deployment -r
