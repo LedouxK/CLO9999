@@ -57,3 +57,9 @@ variable "github_repository" {
   type        = string
   default     = "CLO9999"
 }
+
+variable "azure_publish_profile" {
+  description = "Profil de publication Azure"
+  type        = string
+  sensitive   = true
+}

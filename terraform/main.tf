@@ -15,6 +15,7 @@ provider "azurerm" {
   features {}
 }
 
+# Activation du provider GitHub
 provider "github" {
   token = var.github_token
   owner = var.github_organization
@@ -32,7 +33,7 @@ resource "azurerm_service_plan" "asp" {
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   os_type             = "Linux"
-  sku_name            = "P1v2"  # Plan de production avec bonnes performances
+  sku_name            = "B1"  # Plan de base moins cher
 }
 
 # Base de données MySQL Flexible Server
@@ -44,6 +45,7 @@ resource "azurerm_mysql_flexible_server" "mysql" {
   administrator_password = var.mysql_admin_password
   sku_name            = "B_Standard_B1ms"
   version             = "8.0.21"
+  zone                = "1"
 
   storage {
     size_gb = 20
@@ -74,7 +76,7 @@ resource "azurerm_linux_web_app" "app" {
       php_version = "8.3"
     }
     always_on = true
-    app_command_line = "npm install -g npm@latest && npm install && npm run build && php artisan serve"
+    app_command_line = "php-fpm"
   }
 
   app_settings = {
@@ -92,10 +94,15 @@ resource "azurerm_linux_web_app" "app" {
     "AZURE_STORAGE_NAME"    = var.storage_account_name
     "AZURE_STORAGE_KEY"     = var.storage_account_key
     "AZURE_STORAGE_CONTAINER" = var.storage_container_name
+    "AZURE_STORAGE_URL"     = "https://${azurerm_storage_account.storage.name}.blob.core.windows.net"
     "NODE_ENV"              = "production"
     "NPM_CONFIG_PRODUCTION" = "true"
     "WEBSITE_RUN_FROM_PACKAGE" = "1"
     "SCM_DO_BUILD_DURING_DEPLOYMENT" = "true"
+    "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "true"
+    "PHP_OPCACHE_VALIDATE_TIMESTAMPS" = "0"
+    "PHP_OPCACHE_MAX_ACCELERATED_FILES" = "10000"
+    "PHP_OPCACHE_MEMORY_CONSUMPTION" = "192"
   }
 }
 
@@ -119,6 +126,12 @@ resource "github_actions_secret" "azure_app_name" {
   repository       = var.github_repository
   secret_name      = "AZURE_APP_NAME"
   plaintext_value  = azurerm_linux_web_app.app.name
+}
+
+resource "github_actions_secret" "azure_publish_profile" {
+  repository       = var.github_repository
+  secret_name      = "AZURE_PUBLISH_PROFILE"
+  plaintext_value  = var.azure_publish_profile
 }
 
 resource "github_actions_secret" "app_key" {
