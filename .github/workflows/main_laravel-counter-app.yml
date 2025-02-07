@@ -95,17 +95,28 @@ jobs:
         env:
           AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
         run: |
+          # Vérification détaillée des secrets
+          echo "🔍 Vérification des secrets dans GitHub Actions..."
+          echo "AZURE_CREDENTIALS est défini: ${{ secrets.AZURE_CREDENTIALS != '' }}"
+          echo "AZURE_APP_NAME est défini: ${{ secrets.AZURE_APP_NAME != '' }}"
+          echo "DB_PASSWORD est défini: ${{ secrets.DB_PASSWORD != '' }}"
+          
           # Récupérer l'IP publique de l'exécuteur GitHub Actions
           PUBLIC_IP=$(curl -s https://api.ipify.org)
           echo "IP publique de l'exécuteur: $PUBLIC_IP"
-          
-          # Connexion à Azure
-          az login --service-principal \
-            --username $AZURE_CREDENTIALS
 
-          # Définir la subscription
-          az account set --subscription $AZURE_SUBSCRIPTION_ID
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Vérification de la connexion Azure
+        run: |
+          echo "🔍 Vérification de la connexion Azure..."
+          az account show
           
+      - name: Configure MySQL Firewall Rule
+        run: |
           # Ajouter une règle de pare-feu temporaire pour GitHub Actions
           az mysql flexible-server firewall-rule create \
             --resource-group laravel-rg \
@@ -122,21 +133,12 @@ jobs:
 
       - name: Remove MySQL Firewall Rule
         if: always()
-        env:
-          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
         run: |
-          # Reconnexion à Azure (au cas où la session a expiré)
-          az login --service-principal \
-            --username $AZURE_CREDENTIALS
-
-          # Définir la subscription
-          az account set --subscription $AZURE_SUBSCRIPTION_ID
-
           # Suppression de la règle de pare-feu
           az mysql flexible-server firewall-rule delete \
             --resource-group laravel-rg \
-            --name laravelmysqlsrv \
-            --rule-name allow-github-actions \
+            --server-name laravelmysqlsrv \
+            --name allow-github-actions \
             --yes
 
       - name: Clear Config
